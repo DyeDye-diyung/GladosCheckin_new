@@ -96,6 +96,7 @@ if __name__ == "__main__":
             message_points = "无法获取积分信息"
             if points_resp.status_code == 200:
                 points_result = points_resp.json()
+                print("points API 返回:", points_result)  # 调试输出
                 points = points_result.get("data", {}).get("points", 0)
                 message_points = f"{points} 分"
 
