@@ -24,6 +24,12 @@ if __name__ == "__main__":
     url = "https://glados.cloud/api/user/checkin"
     url2 = "https://glados.cloud/api/user/status"
     url_points = "https://glados.cloud/api/user/points"
+    url_exchange = "https://glados.cloud/api/user/exchange"
+
+    # 积分兑换配置（默认 500 积分换 100 天）
+    # 可选值: "plan100" (100积分→10天), "plan200" (200积分→30天), "plan500" (500积分→100天)
+    exchange_plan = os.environ.get("EXCHANGE_PLAN", "plan500")
+    exchange_thresholds = {"plan100": 100, "plan200": 200, "plan500": 500}
 
     referer = "https://glados.cloud/console/checkin"
     origin = "https://glados.cloud"
@@ -94,30 +100,55 @@ if __name__ == "__main__":
             # 获取积分信息
             points = 0
             message_points = "无法获取积分信息"
+            message_exchange = ""
             if points_resp.status_code == 200:
                 points_result = points_resp.json()
                 # 积分在顶层，且为字符串格式，需要转换
                 points = int(float(points_result.get("points", "0")))
                 message_points = f"{points} 分"
 
-                # 自动兑换天数（当积分 >= 100 时）
-                # TODO: 待用户提供兑换 API 后实现自动兑换功能
-                # if points >= 100:
-                #     exchange_url = "https://glados.cloud/api/user/exchange"  # 待确认
-                #     exchange_resp = requests.post(exchange_url, headers={...}, data=json.dumps({...}))
-                #     ...
+                # 自动兑换天数
+                threshold = exchange_thresholds.get(exchange_plan, 500)
+                if points >= threshold:
+                    exchange_resp = requests.post(
+                        url_exchange,
+                        headers={
+                            "cookie": cookie,
+                            "referer": referer,
+                            "origin": origin,
+                            "user-agent": useragent,
+                            "content-type": "application/json;charset=UTF-8",
+                        },
+                        data=json.dumps({"planType": exchange_plan}),
+                    )
+                    if exchange_resp.status_code == 200:
+                        exchange_result = exchange_resp.json()
+                        if exchange_result.get("code") == 0:
+                            message_exchange = f"✅ 自动兑换成功 ({exchange_plan})"
+                            print(f"兑换成功: {exchange_result}")
+                        else:
+                            message_exchange = f"❌ 兑换失败: {exchange_result.get('message', '未知错误')}"
+                            print(f"兑换失败: {exchange_result}")
+                    else:
+                        message_exchange = (
+                            f"❌ 兑换请求失败 (HTTP {exchange_resp.status_code})"
+                        )
         else:
             email = ""
             message_status = "签到请求url失败, 请检查..."
             message_days = "获取信息失败"
             message_points = "获取信息失败"
+            message_exchange = ""
 
         # 推送内容
+        exchange_line = (
+            f"            兑换情况: {message_exchange}\n" if message_exchange else ""
+        )
         sendContent += f"{'-'*30}\n\
             账号: {email}\n\
             签到情况: {message_status}\n\
             剩余天数: {message_days}\n\
-            当前积分: {message_points}\n"
+            当前积分: {message_points}\n{exchange_line}"
 
         if cookie == cookies[-1]:
             sendContent += "-" * 30
