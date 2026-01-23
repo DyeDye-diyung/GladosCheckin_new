@@ -1,53 +1,87 @@
-# Glados自动签到
+# GLaDOS 自动签到 (新版 glados.cloud)
 
-## 食用方式：
+> 适配 2026 年新版 GLaDOS 网站 (glados.cloud)，支持自动签到 + 积分自动兑换天数
 
-### 注册一个GLaDOS的账号([注册地址](https://glados.space/landing/0A58E-NV28S-6U3QV-33VMG))
+## 功能特性
 
-#### 我的邀请码：B1AW6-4NBAX-VYRZM-5HEJ0
+- 每日自动签到
+- 自动查询积分
+- 积分达标自动兑换天数（支持三档配置）
+- 微信推送通知（可选）
+- 支持多账号
 
-### **Fork**本仓库
+## 食用方式
+
+### 1. 注册 GLaDOS 账号
+
+[注册地址](https://glados.space/landing/0A58E-NV28S-6U3QV-33VMG)
+
+邀请码：`B1AW6-4NBAX-VYRZM-5HEJ0`
+
+### 2. Fork 本仓库
 
 ![图片加载失败](imgs/1.png)
 
-### 添加**secret**
+### 3. 添加 Secrets
 
-1. 跳转至自己的仓库的`Settings`->`Secrets and variables`->`Action`
+跳转至自己的仓库的 `Settings` -> `Secrets and variables` -> `Action`
 
-2. 添加1个`repository secret`，命名为`COOKIES`，其值对应GLaDOS账号的cookie值中的有效部分（获取方式如下）
+#### 必填：COOKIES
 
-- 在GLaDOS的签到页面按`F12`
+添加 `repository secret`，命名为 `COOKIES`
 
-- 切换到`Network`页面下，刷新
+**获取方式：**
+
+1. 打开 GLaDOS 签到页面：https://glados.cloud/console/checkin
+2. 按 `F12` 打开开发者工具
+3. 切换到 `Network` 页面，刷新
 
 ![图片加载失败](imgs/2.png)
 
-- 点击第一个选项卡后在`Request Headers`下找到`Cookie`，右键复制cookie的值即可
+4. 点击任意请求，在 `Request Headers` 下找到 `Cookie`，复制其值
 
-  > 参考格式：koa:sess=eyJ1c2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxAwMH0=; koa:sess.sig=xJkOxxxxxxxxxxxxxxxtnM;
+> 参考格式：`koa:sess=eyJ1c2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxAwMH0=; koa:sess.sig=xJkOxxxxxxxxxxxxxxxtnM;`
 
 ![图片加载失败](imgs/3.png)
 
-- 多账号请在 `COOKIES` 中 添加多个 `cookies` 中间使用 `&`连接即可。（例如： `c1&c3&c3...`）
+**多账号**：在 `COOKIES` 中用 `&` 连接多个 cookie（例如：`cookie1&cookie2&cookie3`）
 
-3. plus 微信推送（非必须）
+#### 可选：PUSHPLUS（微信推送）
 
-- 添加1个`repository secret`，命名为`PUSHPLUS`，其值对应pushplus秘钥: [获取地址](http://www.pushplus.plus)。
+添加 `repository secret`，命名为 `PUSHPLUS`，值为 pushplus 秘钥
 
-### **star**自己的仓库
+[获取地址](http://www.pushplus.plus)
+
+#### 可选：EXCHANGE_PLAN（积分兑换策略）
+
+添加 `repository secret`，命名为 `EXCHANGE_PLAN`，配置自动兑换策略：
+
+| 值 | 积分要求 | 兑换天数 |
+|---|---------|---------|
+| `plan100` | 100 积分 | 10 天 |
+| `plan200` | 200 积分 | 30 天 |
+| `plan500` | 500 积分 | 100 天 (默认) |
+
+> 不配置时默认为 `plan500`，即积分达到 500 时自动兑换 100 天
+
+### 4. Star 自己的仓库
 
 ![图片加载失败](imgs/4.png)
 
 ## 文件结构
 
 ```shell
-│  checkin.py	# 签到脚本
+│  checkin.py           # 签到脚本
 │
 ├─.github
 │  └─workflows
-│          gladosCheck.yml	# Actions 配置文件
+│          gladosCheck.yml  # Actions 配置文件
 ```
+
+## 更新日志
+
+- **2026-01**: 适配新版 glados.cloud，新增积分自动兑换功能
 
 ## 声明
 
-本项目不保证稳定运行与更新, 因GitHub相关规定可能会删库, 请注意备份
+本项目不保证稳定运行与更新，因 GitHub 相关规定可能会删库，请注意备份
