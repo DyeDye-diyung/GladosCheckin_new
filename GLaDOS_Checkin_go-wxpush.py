@@ -115,6 +115,14 @@ if __name__ == '__main__':
             fail_count += 1
             summary_content += f"{'-'*30}\n账号: {email}\n运行错误: {str(e)}\n"
 
+    # --- 修改部分：构建最终的推送内容 ---
+    
+    # 1. 先准备好统计头部（不再以 --- 开头）
+    header = f"成功账号：{success_count}，失败账号：{fail_count}\n"
+    
+    # 2. 将统计头部拼接到详细内容之前
+    final_summary = header + summary_content
+    
     # --- 5. Go-WXPush 统一推送 (修改部分) ---
     push_title = f"GLaDOS签到: 成功{success_count}, 失败{fail_count}"
     logging.info("正在通过 go-wxpush 发送通知...")
@@ -126,7 +134,7 @@ if __name__ == '__main__':
         # 构造 Webhook POST 请求体
         wx_payload = {
             "title": push_title,
-            "content": summary_content,
+            "content": final_summary,  # 使用拼接了头部的完整内容
             "appid": config.wxpush_appid,
             "secret": config.wxpush_secret,
             "userid": config.wxpush_userid,
@@ -138,7 +146,7 @@ if __name__ == '__main__':
         response_data = response.json()
         
         if response_data.get("errcode") == 0:
-            print(f"任务完成，go-wxpush 推送成功。\n{summary_content}")
+            print(f"任务完成，go-wxpush 推送成功。\n{final_summary}")
         else:
             logging.error(f"go-wxpush 推送返回错误: {response_data}")
             
