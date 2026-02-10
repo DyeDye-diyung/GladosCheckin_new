@@ -134,7 +134,7 @@ if __name__ == '__main__':
         }
         
         # 使用 Webhook (POST) 方式发送
-        response = session.post(wxpush_url, json=wx_payload, timeout=30)
+        response = session.post(wxpush_url, json=wx_payload, timeout=30, verify=False)
         response_data = response.json()
         
         if response_data.get("errcode") == 0:
