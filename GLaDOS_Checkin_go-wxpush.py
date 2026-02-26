@@ -105,7 +105,7 @@ if __name__ == '__main__':
                 else:
                     message_exchange = f"❌ 兑换失败: {exch_result.get('message')}"
             
-            account_info = f"{'-'*30}\n账号: {email}\n状态: {message_status}\n剩余: {leftdays} 天\n积分: {current_points}\n"
+            account_info = f"\n{'-'*3}\n\n账号: {email}\n状态: {message_status}\n剩余: {leftdays} 天\n积分: {current_points}\n"
             if message_exchange:
                 account_info += f"兑换: {message_exchange}\n"
             summary_content += account_info
@@ -113,7 +113,7 @@ if __name__ == '__main__':
         except Exception as e:
             logging.error(f"账号 {email} 执行出错: {e}")
             fail_count += 1
-            summary_content += f"{'-'*30}\n账号: {email}\n运行错误: {str(e)}\n"
+            summary_content += f"\n{'-'*3}\n\n账号: {email}\n运行错误: {str(e)}\n"
 
     # --- 修改部分：构建最终的推送内容 ---
     
@@ -122,7 +122,7 @@ if __name__ == '__main__':
     
     # 2. 将统计头部拼接到详细内容之前
     final_summary = header + summary_content
-    
+
     # --- 5. Go-WXPush 统一推送 (修改部分) ---
     push_title = f"GLaDOS签到: 成功{success_count}, 失败{fail_count}"
     logging.info("正在通过 go-wxpush 发送通知...")
