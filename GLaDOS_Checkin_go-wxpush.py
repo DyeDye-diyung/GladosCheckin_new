@@ -86,7 +86,7 @@ if __name__ == '__main__':
             if "Checkin!" in msg:
                 message_status = f"签到成功~ 获得{points_gained}点"
                 success_count += 1
-            elif "Checkin Repeats!" in msg:
+            elif ("Checkin Repeats!" or "Return tomorrow") in msg:
                 message_status = "今日已签到"
                 success_count += 1
             else:
