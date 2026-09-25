@@ -24,3 +24,10 @@ wxpush_appid = os.environ["WXPUSH_APPID"].strip()
 wxpush_secret = os.environ["WXPUSH_SECRET"].strip()
 wxpush_userid = os.environ["WXPUSH_USERID"].strip()
 wxpush_template_id = os.environ["WXPUSH_TEMPLATE_ID"].strip()
+
+# ================= 代理配置（新增） =================
+# 内网混合代理端口，支持 http 和 socks
+# - HTTP 代理写法:  "http://192.168.31.6:7890"
+# - SOCKS5 代理写法: "socks5://192.168.31.6:7890"
+# - 直连（不使用代理）: 留空字符串 "" 或删除该行
+proxy = "http://192.168.31.6:7890"
