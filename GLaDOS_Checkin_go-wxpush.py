@@ -88,8 +88,8 @@ def get_headers(cookie):
 
 if __name__ == '__main__':
     # 随机等待
-    min_wait_time = 0
-    max_wait_time = 1
+    min_wait_time = 30
+    max_wait_time = 300
     wait_time = random.randint(min_wait_time, max_wait_time)
     print(f"正在等待 {wait_time} 秒...")
     time.sleep(wait_time)
