@@ -1,3 +1,4 @@
+
 # -*- coding: UTF-8 -*-
 
 import requests
@@ -8,6 +9,21 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 import time
 import random
+import hashlib
+
+# Challenge 验证参数（与参考代码一致）
+CHALLENGE_SUFFIX = "glados-observe-v1"
+CHALLENGE_DELAY_SECONDS = 2.5
+
+# 服务端提示设备平台不匹配时使用的 User-Agent（与参考代码一致）
+PLATFORM_UA = {
+    "Windows": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "macOS": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+    "Linux": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "iPhone": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+    "iOS": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+    "Android": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+}
 
 # 配置日志
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -86,10 +102,64 @@ def get_headers(cookie):
     }
 
 
+def checkin_with_challenge(session, check_in_url, headers, token):
+    """获取 Challenge，等待后计算 Proof，再以 JSON 提交签到。"""
+    challenge_url = check_in_url + "/challenge"
+    logging.info("正在获取签到 Challenge...")
+    challenge_resp = session.get(challenge_url, headers=headers, timeout=30)
+    challenge_resp.raise_for_status()
+    challenge_data = challenge_resp.json()
+
+    if not isinstance(challenge_data, dict) or challenge_data.get("code") != 0:
+        raise RuntimeError(f"获取 Challenge 失败: {challenge_data}")
+
+    nonce = challenge_data.get("nonce")
+    if not nonce:
+        raise ValueError("Challenge 响应缺少 nonce")
+
+    logging.info("Challenge 获取成功")
+    time.sleep(CHALLENGE_DELAY_SECONDS)
+    proof = hashlib.sha256(f"{nonce}.{CHALLENGE_SUFFIX}".encode("utf-8")).hexdigest()
+    logging.info("Challenge Proof 计算完成")
+
+    payload = {"token": token, "nonce": str(nonce), "proof": proof}
+    logging.info("正在提交 Challenge 签到请求...")
+    checkin_resp = session.post(check_in_url, headers=headers, json=payload, timeout=30)
+    checkin_resp.raise_for_status()
+    checkin_result = checkin_resp.json()
+    if not isinstance(checkin_result, dict):
+        raise ValueError("签到响应格式异常（非 JSON 对象）")
+    logging.info(
+        f"签到响应: code={checkin_result.get('code')}, "
+        f"message={checkin_result.get('message')}"
+    )
+    return checkin_result
+
+
+def checkin_with_device_retry(session, check_in_url, headers, token):
+    """设备平台不匹配时按 loginDevice 切换 UA，并重新获取 Challenge 重试一次。"""
+    result = checkin_with_challenge(session, check_in_url, headers, token)
+    if result.get("code") == 4 and result.get("reason") == "device-mismatch":
+        device = result.get("loginDevice")
+        retry_ua = PLATFORM_UA.get(device)
+        if retry_ua:
+            logging.warning(f"设备平台不匹配(loginDevice={device})，切换 User-Agent 重试一次")
+            retry_headers = headers.copy()
+            retry_headers["User-Agent"] = retry_ua
+            result = checkin_with_challenge(session, check_in_url, retry_headers, token)
+        else:
+            logging.error(f"无法自动匹配登录设备平台(loginDevice={device})")
+
+        if result.get("code") == 4 and result.get("reason") == "device-mismatch":
+            logging.error("重试后设备仍不匹配，请将 get_headers() 中的 User-Agent 改为提取 Cookie 时浏览器的实际 User-Agent")
+
+    return result
+
+
 if __name__ == '__main__':
     # 随机等待
-    min_wait_time = 30
-    max_wait_time = 300
+    min_wait_time = config.min_random_delay
+    max_wait_time = config.max_random_delay
     wait_time = random.randint(min_wait_time, max_wait_time)
     print(f"正在等待 {wait_time} 秒...")
     time.sleep(wait_time)
@@ -121,11 +191,11 @@ if __name__ == '__main__':
         headers = get_headers(cookie)
         email = "Unknown"
         try:
-            # 1. 发送签到请求
-            logging.info(f"正在尝试签到...")
-            checkin_resp = session.post(check_in_url, headers=headers, data=json.dumps(payload), timeout=30)
-            checkin_resp.raise_for_status()
-            checkin_result = checkin_resp.json()
+            # 1. 获取 Challenge 并签到；设备平台不匹配时自动重试一次
+            logging.info("正在尝试 Challenge 签到...")
+            checkin_result = checkin_with_device_retry(
+                session, check_in_url, headers, payload["token"]
+            )
 
             # 2. 获取状态
             state_resp = session.get(status_url, headers=headers, timeout=30)
@@ -138,23 +208,30 @@ if __name__ == '__main__':
             points_result = points_resp.json()
             current_points = int(float(points_result.get("points", "0")))
 
-            # 逻辑判断
-            msg = checkin_result.get('message', '')
+            # 逻辑判断：依据服务端 code 判断，优先识别签到域名不匹配
+            code = checkin_result.get('code', -2)
+            msg = str(checkin_result.get('message', ''))
             points_gained = checkin_result.get('points', 0)
-            if "Checkin!" in msg:
+            checkin_ok = False
+            if "please checkin via" in msg.lower():
+                message_status = f"签到域名不匹配: {msg}"
+                fail_count += 1
+            elif code == 0:
                 message_status = f"签到成功~ 获得{points_gained}点"
                 success_count += 1
-            elif ("Checkin Repeats!" or "Return tomorrow") in msg:
+                checkin_ok = True
+            elif code == 1:
                 message_status = "今日已签到"
                 success_count += 1
+                checkin_ok = True
             else:
-                message_status = f"签到异常: {msg}"
+                message_status = f"签到异常(code={code}): {msg}"
                 fail_count += 1
 
             # 4. 自动兑换逻辑
             message_exchange = ""
             threshold = exchange_thresholds.get(exchange_plan, 500)
-            if current_points >= threshold:
+            if checkin_ok and current_points >= threshold:
                 logging.info(f"积分({current_points})已达标，尝试自动兑换 {exchange_plan}...")
                 exch_resp = session.post(exchange_url, headers=headers, data=json.dumps({"planType": exchange_plan}), timeout=30)
                 exch_result = exch_resp.json()
@@ -203,4 +280,3 @@ if __name__ == '__main__':
 
     except Exception as e:
         logging.error(f"推送失败: {e}")
-        
