@@ -31,4 +31,8 @@ wxpush_template_id = os.environ["WXPUSH_TEMPLATE_ID"].strip()
 # - HTTP 代理写法:  "http://192.168.31.6:7890"
 # - SOCKS5 代理写法: "socks5://192.168.31.6:7890"
 # - 直连（不使用代理）: 留空字符串 "" 或删除该行
-proxy = "http://192.168.31.6:7890"
+proxy = "http://127.0.0.1:7890"
+
+# 签到随机延迟
+min_random_delay = os.environ["Min_Random_Checkin_Delay"].strip()
+max_random_delay = os.environ["Max_Random_Checkin_Delay"].strip()
