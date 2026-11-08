@@ -251,7 +251,7 @@ if __name__ == '__main__':
             summary_content += f"\n{'-'*3}\n\n账号: {email}\n运行错误: {str(e)}\n"
 
     # 构建最终的推送内容
-    header = f"成功账号：{success_count}，失败账号：{fail_count}\n"
+    header = f"GLaDOS签到 成功：{success_count} 失败：{fail_count}\n"
     final_summary = header + summary_content
 
     # 5. Go-WXPush 统一推送
