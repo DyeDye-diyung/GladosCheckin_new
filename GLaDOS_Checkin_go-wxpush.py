@@ -158,8 +158,8 @@ def checkin_with_device_retry(session, check_in_url, headers, token):
 
 if __name__ == '__main__':
     # 随机等待
-    min_wait_time = config.min_random_delay
-    max_wait_time = config.max_random_delay
+    min_wait_time = int(config.min_random_delay)
+    max_wait_time = int(config.max_random_delay)
     wait_time = random.randint(min_wait_time, max_wait_time)
     print(f"正在等待 {wait_time} 秒...")
     time.sleep(wait_time)
