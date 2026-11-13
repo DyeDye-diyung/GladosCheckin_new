@@ -10,9 +10,9 @@ exchange_plan = os.environ["EXCHANGE_PLAN"].strip()
 # GLaDOS Cookie 列表 (支持多账号)
 # 格式：["koa:sess=xxx; koa:sess.sig=yyy; gld:sess=zzz; gld:sess.sig=www", "第二个账号..."]
 cookies = [
-    f"koa:sess={os.environ['KOA_SESS'].strip()}; koa:sess.sig={os.environ['KOA_SESS_SIG'].strip()}; gld:sess={os.environ['GLD_SESS'].strip()}; gld:sess.sig={os.environ['GLD_SESS_SIG'].strip()}",
-    f"koa:sess={os.environ['KOA_SESS_2'].strip()}; koa:sess.sig={os.environ['KOA_SESS_SIG_2'].strip()}; gld:sess={os.environ['GLD_SESS_2'].strip()}; gld:sess.sig={os.environ['GLD_SESS_SIG_2'].strip()}",
-    f"koa:sess={os.environ['KOA_SESS_3'].strip()}; koa:sess.sig={os.environ['KOA_SESS_SIG_3'].strip()}; gld:sess={os.environ['GLD_SESS_3'].strip()}; gld:sess.sig={os.environ['GLD_SESS_SIG_3'].strip()}",
+    f"koa:sess={os.environ['KOA_SESS'].strip()}; koa:sess.sig={os.environ['KOA_SESS_SIG'].strip()}; gld:accts={os.environ['GLD_ACCTS'].strip()}; gld:accts.sig={os.environ['GLD_ACCTS_SIG'].strip()}; gld:sess={os.environ['GLD_SESS'].strip()}; gld:sess.sig={os.environ['GLD_SESS_SIG'].strip()}",
+    f"koa:sess={os.environ['KOA_SESS_2'].strip()}; koa:sess.sig={os.environ['KOA_SESS_SIG_2'].strip()}; gld:accts={os.environ['GLD_ACCTS_2'].strip()}; gld:accts.sig={os.environ['GLD_ACCTS_SIG_2'].strip()}; gld:sess={os.environ['GLD_SESS_2'].strip()}; gld:sess.sig={os.environ['GLD_SESS_SIG_2'].strip()}",
+    f"koa:sess={os.environ['KOA_SESS_3'].strip()}; koa:sess.sig={os.environ['KOA_SESS_SIG_3'].strip()}; gld:accts={os.environ['GLD_ACCTS_3'].strip()}; gld:accts.sig={os.environ['GLD_ACCTS_SIG_3'].strip()}; gld:sess={os.environ['GLD_SESS_3'].strip()}; gld:sess.sig={os.environ['GLD_SESS_SIG_3'].strip()}",
 ]
 
 # go-wxpush相关参数
