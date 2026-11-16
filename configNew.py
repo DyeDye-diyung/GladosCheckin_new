@@ -36,3 +36,22 @@ proxy = "http://127.0.0.1:7890"
 # 签到随机延迟
 min_random_delay = os.environ["Min_Random_Checkin_Delay"].strip()
 max_random_delay = os.environ["Max_Random_Checkin_Delay"].strip()
+
+# 浏览器签到脚本使用
+glados_accounts = [
+    {
+        "name": "账号A",
+        "domain": "glados.cloud",
+        "expected_email": "a_account@example.com",
+    },
+    {
+        "name": "账号B",
+        "domain": "glados.one",
+        "expected_email": "b_account@example.com",
+    },
+    {
+        "name": "账号C",
+        "domain": "glados.rocks",
+        "expected_email": "c_account@example.com",
+    },
+    
