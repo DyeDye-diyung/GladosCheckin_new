@@ -79,6 +79,32 @@ TURNSTILE_READY_SCRIPT = """
 })()
 """
 
+# 检查网页是否存在 Turnstile 验证组件。
+# 仅检测组件结构，不读取令牌。
+TURNSTILE_PRESENT_SCRIPT = """
+(() => {
+    const tokenFields = document.querySelectorAll(
+        'input[name="cf-turnstile-response"],' +
+        'textarea[name="cf-turnstile-response"]'
+    );
+
+    if (tokenFields.length > 0) {
+        return true;
+    }
+
+    const elements = document.querySelectorAll(
+        '.cf-turnstile, [data-sitekey], ' +
+        'iframe[src*="challenges.cloudflare.com"]'
+    );
+
+    return Array.from(elements).some(el => {
+        const rect = el.getBoundingClientRect();
+
+        return rect.width > 0 && rect.height > 0;
+    });
+})()
+"""
+
 
 # ============================================================
 # HTTP Session：仅用于 Go-WXPush
@@ -229,29 +255,69 @@ def find_checkin_button(page):
 
 def wait_for_turnstile(page, timeout=45):
     """
-    等待 Turnstile 生成非空验证响应。
+    判断 Turnstile 状态。
 
-    如果官网没有使用标准响应字段，返回 False。
-    不读取、保存或打印令牌。
+    返回：
+      verified      已检测到非空响应字段
+      not_required  未检测到活动验证组件
+      pending       发现验证组件，但未确认验证完成
     """
 
-    logging.info("正在等待 Turnstile 验证响应...")
+    # 1. 先快速检查验证是否已经完成
+    try:
+        page.wait_for_script(
+            TURNSTILE_READY_SCRIPT,
+            timeout=3,
+        )
 
+        logging.info(
+            "Turnstile 已生成验证响应"
+        )
+        return "verified"
+
+    except WaitTimeout:
+        pass
+
+    # 2. 检查是否存在活动验证组件
+    try:
+        page.wait_for_script(
+            TURNSTILE_PRESENT_SCRIPT,
+            timeout=5,
+        )
+
+        logging.info(
+            "检测到 Turnstile 组件，"
+            "继续等待验证完成"
+        )
+
+    except WaitTimeout:
+        logging.info(
+            "未检测到 Turnstile 组件，"
+            "允许尝试正常签到"
+        )
+
+        return "not_required"
+
+    # 3. 如果存在验证组件，继续等待
     try:
         page.wait_for_script(
             TURNSTILE_READY_SCRIPT,
             timeout=timeout,
         )
 
-        logging.info("检测到 Turnstile 非空响应字段")
-        return True
+        logging.info(
+            "Turnstile 验证已完成"
+        )
+
+        return "verified"
 
     except WaitTimeout:
         logging.warning(
-            "Turnstile 验证未确认完成，"
-            "或官网没有提供标准响应字段"
+            "Turnstile 组件存在，"
+            "但验证未完成或无法确认"
         )
-        return False
+
+        return "pending"
 
 
 def bring_page_to_front(page):
@@ -479,24 +545,39 @@ def browser_checkin(
         # 6. 等待 Turnstile
         # ----------------------------------------------------
 
-        verified = wait_for_turnstile(
+        verification_state = wait_for_turnstile(
             page,
             timeout=TURNSTILE_VERIFY_TIMEOUT,
         )
 
-        if not verified:
+        if verification_state == "pending":
+
             keep_page_open = True
             bring_page_to_front(page)
 
             return make_result(
                 "verification_required",
-                f"⚠️ {domain} 登录有效，"
-                "但 Turnstile 验证尚未确认完成。"
-                "请通过 NAS Chromium VNC "
-                "检查保留的该域名签到页面。"
+                f"⚠️ {domain} 检测到 Turnstile 验证组件，"
+                "但未确认完成验证。"
+                "请通过 NAS Chromium VNC 检查。"
                 "本次未点击签到，也未执行兑换。",
                 email=email,
                 leftdays=leftdays,
+            )
+
+        elif verification_state == "not_required":
+
+            logging.info(
+                "[%s] 未检测到活动 Turnstile，"
+                "将尝试通过官网正常签到",
+                domain,
+            )
+
+        else:
+
+            logging.info(
+                "[%s] Turnstile 验证响应已就绪",
+                domain,
             )
 
         # ----------------------------------------------------
@@ -682,6 +763,13 @@ def browser_checkin(
                 email=email,
                 leftdays=leftdays,
             )
+        
+        # 签到成功时，标注 Turnstile 验证方式
+        if kind == "success":
+            if verification_state == "not_required":
+                message_status += "（未检测到 Turnstile 组件，直接签到成功）"
+            elif verification_state == "verified":
+                message_status += "（Turnstile 验证响应已就绪，签到成功）"
 
         logging.info(
             "[%s] %s",
