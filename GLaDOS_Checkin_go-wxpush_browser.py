@@ -395,16 +395,92 @@ def browser_checkin(
 
         logging.info("[%s] 正在打开签到页面...", domain)
 
-        # 保留已经验证成功的 Turnstile 处理方式
-        with page.expect_cloudflare_turnstile(
-            time_to_wait_captcha=TURNSTILE_DETECT_TIMEOUT
-        ):
-            page.go_to(
-                checkin_page,
-                timeout=60,
+
+        # ----------------------------------------------------
+        # Pydoll Turnstile 详细日志
+        # 仅在处理 Turnstile 时临时开启对应模块 DEBUG
+        # ----------------------------------------------------
+
+        pydoll_tab_logger = logging.getLogger("pydoll.browser.tab")
+
+        # 保存原有日志等级
+        old_pydoll_log_level = pydoll_tab_logger.level
+
+        turnstile_start_time = time.monotonic()
+
+        logging.info(
+            "[%s] 开始执行 Pydoll Turnstile 处理",
+            domain,
+        )
+
+        logging.info(
+            "[%s] Turnstile 控件检测等待上限：%s 秒",
+            domain,
+            TURNSTILE_DETECT_TIMEOUT,
+        )
+
+        # 只开启 Pydoll Tab 模块的 DEBUG
+        pydoll_tab_logger.setLevel(logging.DEBUG)
+
+        try:
+
+            with page.expect_cloudflare_turnstile(
+                time_to_wait_captcha=TURNSTILE_DETECT_TIMEOUT
+            ):
+
+                logging.info(
+                    "[%s] 已注册页面加载监听，开始打开签到页面",
+                    domain,
+                )
+
+                page.go_to(
+                    checkin_page,
+                    timeout=60,
+                )
+
+        except Exception as exc:
+
+            elapsed = time.monotonic() - turnstile_start_time
+
+            logging.error(
+                "[%s] Pydoll Turnstile 处理或页面导航异常",
+                domain,
             )
 
-        logging.info("[%s] 页面加载完成", domain)
+            logging.error(
+                "[%s] 异常类型：%s，耗时：%.2f 秒",
+                domain,
+                type(exc).__name__,
+                elapsed,
+            )
+
+            raise
+
+        else:
+
+            elapsed = time.monotonic() - turnstile_start_time
+
+            logging.info(
+                "[%s] Pydoll Turnstile 处理上下文已结束，耗时：%.2f 秒",
+                domain,
+                elapsed,
+            )
+
+            logging.info(
+                "[%s] 注意：处理器结束不代表 Cloudflare 已接受验证，"
+                "后续将独立检查验证响应",
+                domain,
+            )
+
+        finally:
+
+            # 恢复原来的日志等级
+            pydoll_tab_logger.setLevel(old_pydoll_log_level)
+
+        logging.info(
+            "[%s] 页面加载及 Turnstile 处理阶段结束",
+            domain,
+        )
 
         # ----------------------------------------------------
         # 2. 检查域名是否跳转
@@ -550,20 +626,105 @@ def browser_checkin(
             timeout=TURNSTILE_VERIFY_TIMEOUT,
         )
 
+
         if verification_state == "pending":
 
-            keep_page_open = True
-            bring_page_to_front(page)
-
-            return make_result(
-                "verification_required",
-                f"⚠️ {domain} 检测到 Turnstile 验证组件，"
-                "但未确认完成验证。"
-                "请通过 NAS Chromium VNC 检查。"
-                "本次未点击签到，也未执行兑换。",
-                email=email,
-                leftdays=leftdays,
+            logging.warning(
+                "[%s] Turnstile 自动验证未完成，"
+                "开始尝试坐标点击兜底",
+                domain,
             )
+
+            try:
+
+                # 动态定位 Turnstile 复选框并点击一次
+                clicked = False
+
+                for attempt in range(6):
+                    try:
+                        # 穿透跨域 iframe，获取当前页面的 Shadow Root
+                        roots = page.find_shadow_roots(deep=True)
+                    except Exception:
+                        roots = []
+
+                    for root in roots:
+                        try:
+                            checkbox = root.query(
+                                'input[type="checkbox"]',
+                                raise_exc=False,
+                            )
+
+                            if checkbox is None or not checkbox.is_visible():
+                                continue
+
+                            # 获取复选框实时位置（所属 iframe 内的坐标）
+                            bounds = checkbox.get_bounds_using_js()
+
+                            logging.info(
+                                "[%s] 找到 Turnstile 候选复选框，"
+                                "实时位置：%s",
+                                domain,
+                                bounds,
+                            )
+
+                            # Pydoll 自动计算元素中心并在正确的 iframe 中点击
+                            checkbox.click()
+
+                            clicked = True
+                            break
+
+                        except Exception as exc:
+                            logging.debug(
+                                "[%s] 本次复选框定位或点击失败：%s",
+                                domain,
+                                type(exc).__name__,
+                            )
+
+                    if clicked:
+                        break
+
+                    time.sleep(0.5)
+
+                if not clicked:
+                    raise RuntimeError(
+                        "未能动态定位或点击 Turnstile 复选框"
+                    )
+
+                logging.info(
+                    "[%s] 已执行 Turnstile 兜底动态定位坐标点击，"
+                    "等待 5 秒",
+                    domain,
+                )
+
+                time.sleep(5)
+
+                # 标记本次采用兜底点击
+                verification_state = "fallback_click"
+
+                logging.info(
+                    "[%s] 兜底等待结束，"
+                    "将尝试正常签到，"
+                    "最终以服务器响应为准",
+                    domain,
+                )
+
+            except Exception as exc:
+                keep_page_open = True
+                bring_page_to_front(page)
+
+                logging.error(
+                    "[%s] Turnstile 兜底点击执行失败：%s",
+                    domain,
+                    type(exc).__name__,
+                )
+
+                return make_result(
+                    "verification_required",
+                    f"❌ {domain} Turnstile 兜底点击执行异常，"
+                    "请通过 VNC 人工检查。",
+                    email=email,
+                    leftdays=leftdays,
+                )
 
         elif verification_state == "not_required":
 
@@ -770,6 +931,8 @@ def browser_checkin(
                 message_status += "（未检测到 Turnstile 组件，直接签到成功）"
             elif verification_state == "verified":
                 message_status += "（Turnstile 验证响应已就绪，签到成功）"
+            elif verification_state == "fallback_click":
+                message_status += "（Turnstile 兜底动态定位坐标点击后签到成功）"
 
         logging.info(
             "[%s] %s",
